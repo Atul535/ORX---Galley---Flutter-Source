@@ -1,0 +1,106 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+
+import '../providers/custom_theme_provider.dart';
+import '../widgets/activity_detector.dart';
+
+import 'entertainment_bedroom_audio.dart';
+import 'entertainment_bedroom_fwd.dart';
+
+
+class EntertainmentBedroomScreen extends StatefulWidget {
+  const EntertainmentBedroomScreen({super.key, title});
+
+  @override
+  State<EntertainmentBedroomScreen> createState() => _EntertainmentBedroomScreenState();
+}
+
+class _EntertainmentBedroomScreenState extends State<EntertainmentBedroomScreen> with TickerProviderStateMixin {
+  String title = '';
+  Radius iconsBorderRadius = const Radius.circular(15);
+
+  CustomThemes myThemes = CustomThemes();
+  late CustomTheme myTheme = myThemes.getActiveTheme();
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final CustomThemes myThemes = Provider.of<CustomThemes>(context, listen: true);
+    myTheme = myThemes.getActiveTheme();
+  }
+
+  TabBar get _tabBar => TabBar(
+        enableFeedback: false,
+        overlayColor: MaterialStateProperty.resolveWith<Color?>(
+          (Set<MaterialState> states) {
+            if (states.contains(MaterialState.pressed)) {
+              return Colors.black; //<-- SEE HERE
+            }
+            return null;
+          },
+        ),
+        automaticIndicatorColorAdjustment: true,
+        indicatorColor: myTheme.tabBarTheme?.indicatorColor,
+        unselectedLabelColor: myTheme.tabBarTheme?.unselectedLabelColor,
+        labelColor: myTheme.tabBarTheme?.labelColor,
+        indicatorSize: myTheme.tabBarTheme?.indicatorSize,
+        labelStyle: myTheme.tabBarTheme?.labelStyle,
+        indicatorWeight: myTheme.tabBarTheme!.indicatorWeight!.toDouble(),
+        tabs: const <Widget>[
+          Tab(
+            // height: 40,
+            // icon: Icon(Icons.speaker),
+            text: 'VIDEO',
+          ),
+          Tab(
+            // height: 40,
+            // icon: Icon(Icons.speaker),
+            text: 'AUDIO',
+          ),
+        ],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return ActivityDetector(
+      child: Padding(
+        padding: const EdgeInsets.only(top: kToolbarHeight), // ⭐ Celá stránka odsazená
+        child: DefaultTabController(
+          animationDuration: Duration.zero,
+          length: _tabBar.tabs.length,
+          initialIndex: 0,
+          child: Scaffold(
+            appBar: AppBar(
+              automaticallyImplyLeading: false,
+              toolbarHeight: 0,
+              bottom: PreferredSize(
+                preferredSize: _tabBar.preferredSize,
+                child: ColoredBox(
+                  color: myTheme.tabBarTheme?.tabColor as Color,
+                  child: _tabBar,
+                ),
+              ),
+            ),
+            body: const TabBarView(
+              physics: const NeverScrollableScrollPhysics(),
+              children: <Widget>[
+                EntertainmentBedroomFwd(key: PageStorageKey('fwd1')),
+
+                EntertainmentBedroomAudio(key: PageStorageKey('audio')),
+                // EntertainmentLoungeFwd(),
+                // EntertainmentLoungeFwd(),
+                // EntertainmentLoungeAudio(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

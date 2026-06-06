@@ -1,0 +1,1 @@
+enum VirtualKeyboardDefaultLayouts { Arabic, English }

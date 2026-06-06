@@ -1,0 +1,499 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../managers/global_touch_manager.dart';
+import '../model/component_state.dart';
+import '../model/current_state.dart';
+import '../model/position_model.dart';
+import '../providers/current_state_provider.dart';
+
+import '../providers/custom_theme_provider.dart';
+import '../model/theme/item_theme.dart';
+import '../utils/logger.dart';
+
+// enum to define the side of the button in case we want to create a group of buttons
+// we want to have button thats on the left side or right side or in the center of the group
+enum GenericSelelectionWidgetButtonSide { left, right, middle, none }
+
+class GenericSelectionWidget extends StatefulWidget {
+  final String? id;
+  final String? title;
+  final List<IconData>? icons;
+  final double iconSize;
+  final String provider;
+  final bool isMomentary;
+  final String? route;
+  final VoidCallback onStateCallBack;
+  final VoidCallback offStateCallBack;
+  final bool isSlider;
+  final int delayMilliseconds;
+  final double height;
+  final double width;
+  final double textIconSpacing;
+  final Map<int, GenericSelectionState> states;
+  final GenericSelelectionWidgetButtonSide side;
+  final List<double> marginLRTB;
+  final TextStyle? textStyle;
+  final bool isNavigation;
+  final Color? iconsColor;
+  final List<Shadow>? iconsShadow;
+  final Position? position;
+  final bool isTransparent;
+  final BorderRadius? borderRadius;
+  final Color? color;
+  final List<double>? imageSize;
+
+  GenericSelectionWidget({
+    super.key,
+    id,
+    this.title,
+    this.icons = const [],
+    this.iconSize = 100,
+    this.iconsColor,
+    this.provider = "",
+    this.isMomentary = false,
+    this.route,
+    this.onStateCallBack = emptyOnStateCallBack,
+    this.offStateCallBack = emptyOffStateCallBack,
+    this.isSlider = false,
+    this.delayMilliseconds = 25,
+    this.height = 150,
+    this.width = 150,
+    this.textIconSpacing = 10,
+    this.side = GenericSelelectionWidgetButtonSide.none,
+    this.marginLRTB = const [0.0, 0.0, 0.0, 0.0],
+    this.textStyle,
+    this.isNavigation = false,
+    this.iconsShadow,
+    this.position,
+    this.isTransparent = false,
+    this.borderRadius,
+    this.color,
+    this.imageSize,
+    Map<int, GenericSelectionState>? states,
+  })  : id = id ?? UniqueKey().toString(),
+        states = states ?? const {};
+
+  static void emptyOnStateCallBack() {}
+  static void emptyOffStateCallBack() {}
+
+  @override
+  State<GenericSelectionWidget> createState() => _GenericSelectionWidgetState();
+}
+
+class _GenericSelectionWidgetState extends State<GenericSelectionWidget> {
+  bool _released = false;
+  Timer? _momentaryResetTimer;
+  DateTime? _touchStartTime;
+  bool _isHeld = false;
+  bool _hasBeenHeldLongEnough = false;
+  int? _primaryPointerId;
+  bool _forceReset = false;
+
+  void _navigateIfNeeded(BuildContext context, int currStateValue) {
+    final String? route = widget.states[currStateValue]?.route;
+    logDebug("GenericSelectionWidget", "Navigating to $route");
+    if (route != null && route.isNotEmpty) {
+      Navigator.of(context).pushNamed(route);
+      _momentaryResetTimer?.cancel();
+    }
+  }
+  void _resetMomentaryButton(BuildContext context) {
+    if (widget.isMomentary && _isHeld) {
+      _isHeld = false;
+      Provider.of<CurrentStateProvider>(context, listen: false)
+          .setCurrentState(widget.id.toString(), 0);
+      widget.offStateCallBack();
+      GlobalTouchManager.releaseTouch();
+      logDebug("GenericSelectionWidget", "Force reset momentary button");
+    }
+  }
+
+  @override
+  void dispose() {
+    _momentaryResetTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    CustomTheme myTheme = Provider.of<CustomThemes>(context, listen: true).getActiveTheme();
+    ItemTheme itemTheme = myTheme.selectionItemThemeInactive as ItemTheme;
+
+    bool displayIcons = true;
+    int textWidgetFlex = 2;
+    int iconWidgetFlex = 5;
+
+    if (widget.isNavigation) {
+      textWidgetFlex = 5;
+      iconWidgetFlex = 2;
+    }
+
+    Widget selectionContent = Selector<CurrentStateProvider, ({int state, bool isInhibited})>(selector: (context, provider) {
+      final stateObject = provider.getCurrentStateObject(widget.id ?? '');
+      return (state: stateObject.currentState, isInhibited: stateObject.isInhibited);
+    }, builder: (context, values, child) {
+      int currStateValue = values.state;
+      bool isActive = currStateValue == 1;
+
+      bool isInhibited = values.isInhibited;
+
+      bool isTouchDisabled = widget.states[currStateValue]?.touchDisabled ?? widget.states[0]?.touchDisabled ?? false;
+
+      if (isActive) {
+        itemTheme = myTheme.selectionItemThemeActive as ItemTheme;
+      }
+
+      if ((widget.states[currStateValue] != null && widget.states[currStateValue]!.icons.isNotEmpty) || (widget.icons != null && widget.icons!.isNotEmpty)) {
+        // we have icons to display
+        displayIcons = true;
+      } else {
+        //no icons to display
+        displayIcons = false;
+      }
+
+      return AbsorbPointer(
+          absorbing: isInhibited,
+          child: ShaderMask(
+            shaderCallback: (bounds) {
+              return const RadialGradient(
+                colors: [Colors.grey, Colors.transparent],
+                radius: 0.8,
+              ).createShader(bounds);
+            },
+            blendMode: isInhibited ? BlendMode.saturation : BlendMode.dst, // Adjust this for different effects
+            child: Listener(
+              onPointerDown: (PointerDownEvent event) {
+                logDebug("GenericSelectionWidget", "onPointerDown: pointer=${event.pointer}, kind=${event.kind}");
+                // Track the first pointer that touches this widget
+                if (_primaryPointerId == null) {
+                  _primaryPointerId = event.pointer;
+                }
+              },
+              onPointerUp: (PointerUpEvent event) {
+                logDebug("GenericSelectionWidget", "onPointerUp: pointer=${event.pointer}, primary=$_primaryPointerId");
+                // If this is our primary pointer being released, reset the button
+                if (_primaryPointerId == event.pointer) {
+                  _primaryPointerId = null;
+                  // Force reset on next event cycle to allow time for current event to complete
+                  if (widget.isMomentary && _isHeld) {
+                    Future.microtask(() => _resetMomentaryButton(context));
+                  }
+                }
+              },
+              onPointerCancel: (PointerCancelEvent event) {
+                logDebug("GenericSelectionWidget", "onPointerCancel: pointer=${event.pointer}, primary=$_primaryPointerId");
+                // If this is our primary pointer being canceled, reset the button
+                if (_primaryPointerId == event.pointer) {
+                  _primaryPointerId = null;
+                  if (widget.isMomentary && _isHeld) {
+                    Future.microtask(() => _resetMomentaryButton(context));
+                  }
+                }
+              },
+              child: GestureDetector(
+                onPanDown: (details) {
+                  logDebug("GenericSelectionWidget **************************************", "onPanDown: Started");
+                  if (isTouchDisabled || isInhibited || !GlobalTouchManager.canTouch()) {
+                    logDebug("GenericSelectionWidget", "onPanDown: Touch disabled");
+                    return;
+                  }
+
+                GlobalTouchManager.activateTouch(); // Prevent multitouch
+                logDebug("GenericSelectionWidget", "onPanDown: Touch activated");
+                _touchStartTime = DateTime.now(); // Track touch start time
+
+                _hasBeenHeldLongEnough = false;
+
+                _momentaryResetTimer?.cancel();
+
+                if (!widget.isMomentary) {
+                  logDebug("GenericSelectionWidget", "onPanDown: Non-momentary button");
+                  // Toggle the non-momentary button immediately on press
+                  if (isActive) {
+                    widget.onStateCallBack();
+                  } else {
+                    widget.offStateCallBack();
+                  }
+
+                  logDebug("GenericSelectionWidget", "Changing state from $currStateValue to ${currStateValue == 0 ? 1 : 0}");
+                  Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), (currStateValue == 0) ? 1 : 0);
+                  GlobalTouchManager.releaseTouch();
+                  // Handle navigation if needed
+                } else {
+                  logDebug("GenericSelectionWidget", "onPanDown: Momentary button");
+                  // Cancel any existing timer to prevent unexpected reset
+                  _momentaryResetTimer?.cancel();
+
+                  // For momentary buttons, set active and ensure it stays highlighted for at least 250ms
+                  Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 1);
+                  widget.onStateCallBack();
+                  _isHeld = true;
+                  _released = false;
+
+                  logDebug("GenericSelectionWidget", "onPanDown: Momentary button activated, starting timer");
+                  _momentaryResetTimer = Timer(const Duration(milliseconds: 250), () {
+                    logDebug("GenericSelectionWidget", "onPanDown: Momentary button timer expired, release $_released");
+                    _hasBeenHeldLongEnough = true;
+                    if (_released) {
+                      logDebug("GenericSelectionWidget", "onPanDown: Momentary button released before 250ms, resetting");
+                      Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                      widget.offStateCallBack();
+
+                      GlobalTouchManager.releaseTouch();
+                    }
+                  });
+                }
+                logDebug("GenericSelectionWidget", "onPanDown: going to navigateIfNeeded");
+                _navigateIfNeeded(context, currStateValue);
+              },
+              onPanUpdate: (details) {
+                logDebug("GenericSelectionWidget", "onPanUpdate: Finger moved by ${details.delta.dx.abs()} and ${details.delta.dy.abs()}");
+
+                  // If significant movement is detected (>2px in any direction), treat as a release
+                  if (widget.isMomentary && _isHeld && 
+                      (details.delta.dx.abs() > 2 || details.delta.dy.abs() > 2)) {
+                    logDebug("GenericSelectionWidget", "onPanUpdate: Cancelling due to movement");
+                    _isHeld = false;
+                    Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                    widget.offStateCallBack();
+                    GlobalTouchManager.releaseTouch();
+                  }
+                },
+                onHorizontalDragUpdate: (details) {
+                  if (widget.isMomentary) {
+                    _momentaryResetTimer?.cancel();
+                    Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                    GlobalTouchManager.releaseTouch();
+                  }
+                },
+                onPanEnd: (details) {
+                  logDebug("GenericSelectionWidget", "onPanEnd: Started");
+                  if (widget.isMomentary) {
+                    final elapsedTime = DateTime.now().difference(_touchStartTime ?? DateTime.now()).inMilliseconds;
+                    _isHeld = false;
+                    if (elapsedTime < 250) {
+                      // Ensure button remains active for at least 250ms
+                      final int remainingTime = 250 - elapsedTime;
+                      logDebug("GenericSelectionWidget", "Quick tap detected! Ensuring active state for extra $remainingTime ms");
+
+                      _momentaryResetTimer = Timer(Duration(milliseconds: remainingTime), () {
+                        if (!_isHeld) {
+                          Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                          widget.offStateCallBack();
+                          logDebug("GenericSelectionWidget", "Momentary button released after delay");
+                        }
+                      });
+                    } else {
+                      Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                      widget.offStateCallBack();
+                    }
+                  }
+                  _primaryPointerId = null; // Reset primary pointer ID
+                  GlobalTouchManager.releaseTouch();
+                },
+                onLongPressCancel: () {
+                  logDebug("GenericSelectionWidget", "onLongPressCancel: Started");
+                  _released = true;
+                  _isHeld = false;
+                  if (!_hasBeenHeldLongEnough) {
+                    // Only cancel if it didn't reach 250ms
+                    logDebug("GenericSelectionWidget", "onLongPressCancel: Ignored, button hasn't been held long enough.");
+                    return;
+                  }
+
+                if (_momentaryResetTimer != null && _momentaryResetTimer!.isActive) {
+                  logDebug("GenericSelectionWidget", "onLongPressCancel: Canceling momentary reset timer");
+                  _momentaryResetTimer!.cancel(); // Prevent early deactivation
+                }
+
+                if (widget.isMomentary) {
+                  Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                  widget.offStateCallBack();
+                  logDebug("GenericSelectionWidget", "Momentary button canceled");
+                }
+
+                logDebug("GenericSelectionWidget", "onLongPressCancel: Touch released");
+                GlobalTouchManager.releaseTouch();
+              },
+              onLongPressDown: (details) {
+                logDebug("GenericSelectionWidget", "onLongPressDown: Started");
+                if (isTouchDisabled || !GlobalTouchManager.canTouch()) {
+                  logDebug("GenericSelectionWidget", "onLongPressDown: Touch disabled");
+                  return;
+                }
+
+                GlobalTouchManager.activateTouch(); // Prevent multitouch
+                _isHeld = true;
+
+                if (widget.isMomentary) {
+                  logDebug("GenericSelectionWidget", "onLongPressDown: Momentary button");
+                  _momentaryResetTimer?.cancel(); // Cancel any prior timer
+                  Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 1);
+                  widget.onStateCallBack();
+                }
+                _navigateIfNeeded(context, currStateValue);
+              },
+              onLongPressUp: () {
+                logDebug("GenericSelectionWidget", "onLongPressUp: Started");
+                if (isTouchDisabled) {
+                  return;
+                }
+                _isHeld = false;
+
+                if (widget.isMomentary) {
+                  logDebug("GenericSelectionWidget", "onLongPressUp: Momentary button");
+                  Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                  widget.offStateCallBack();
+                }
+
+                  _primaryPointerId = null; // Reset primary pointer ID
+                  GlobalTouchManager.releaseTouch(); // Release the touch flag
+                },
+                child: Container(
+                  margin: EdgeInsets.fromLTRB(
+                    widget.marginLRTB[0],
+                    widget.marginLRTB[1],
+                    widget.marginLRTB[2],
+                    widget.marginLRTB[3],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Container(
+                        height: widget.height,
+                        width: widget.width,
+                        decoration: BoxDecoration(
+                          border: !widget.isTransparent ? (widget.color != null ? Border.all(color: Colors.white) : itemTheme.border) : null,
+                          color: !widget.isTransparent ? (widget.color != Colors.transparent ? widget.color ?? itemTheme.backroundColor : itemTheme.backroundColor) : widget.color,
+                          gradient: !widget.isTransparent ? (widget.color != Colors.transparent ? itemTheme.gradient : itemTheme.gradient) : null,
+                          borderRadius:
+                              // based on the border side we will set the border radius
+                              !widget.isTransparent
+                                  ? (widget.side == GenericSelelectionWidgetButtonSide.left
+                                      ? itemTheme.borderRadius?.copyWith(
+                                            topLeft: itemTheme.borderRadius?.topLeft ?? const Radius.circular(20),
+                                            bottomLeft: itemTheme.borderRadius?.bottomLeft ?? const Radius.circular(20),
+                                            topRight: Radius.zero,
+                                            bottomRight: Radius.zero,
+                                          ) ??
+                                          BorderRadius.only(
+                                            topLeft: itemTheme.borderRadius?.topRight ?? const Radius.circular(20),
+                                            bottomLeft: itemTheme.borderRadius?.bottomRight ?? const Radius.circular(20),
+                                            topRight: Radius.zero,
+                                            bottomRight: Radius.zero,
+                                          )
+                                      : widget.side == GenericSelelectionWidgetButtonSide.right
+                                          ? itemTheme.borderRadius?.copyWith(
+                                                topRight: itemTheme.borderRadius?.topRight ?? const Radius.circular(20),
+                                                bottomRight: itemTheme.borderRadius?.bottomRight ?? const Radius.circular(20),
+                                                topLeft: Radius.zero,
+                                                bottomLeft: Radius.zero,
+                                              ) ??
+                                              BorderRadius.only(
+                                                topRight: itemTheme.borderRadius?.topLeft ?? const Radius.circular(20),
+                                                bottomRight: itemTheme.borderRadius?.bottomLeft ?? const Radius.circular(20),
+                                                topLeft: Radius.zero,
+                                                bottomLeft: Radius.zero,
+                                              )
+                                          : widget.side == GenericSelelectionWidgetButtonSide.middle
+                                              ? itemTheme.borderRadius?.copyWith(
+                                                    topLeft: Radius.zero,
+                                                    bottomLeft: Radius.zero,
+                                                    topRight: Radius.zero,
+                                                    bottomRight: Radius.zero,
+                                                  ) ??
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.zero,
+                                                    bottomLeft: Radius.zero,
+                                                    topRight: Radius.zero,
+                                                    bottomRight: Radius.zero,
+                                                  )
+                                              : widget.borderRadius ?? itemTheme.borderRadius ?? BorderRadius.circular(20))
+                                  : null,
+                          boxShadow: !widget.isTransparent ? itemTheme.boxShadow : null,
+                        ),
+                        alignment: Alignment.center,
+                        child: !widget.isTransparent
+                            ? Flex(
+                                direction: Axis.vertical,
+                                mainAxisAlignment: displayIcons ? MainAxisAlignment.spaceEvenly : MainAxisAlignment.center,
+                                children: [
+                                  widget.isNavigation
+                                      ? Flexible(
+                                          flex: textWidgetFlex,
+                                          child: Text(
+                                            widget.states[currStateValue]?.title ?? widget.title ?? "",
+                                            textAlign: TextAlign.center,
+                                            style: widget.textStyle?.copyWith(
+                                                  color: itemTheme.textColor ?? itemTheme.symbolColor,
+                                                  shadows: itemTheme.textShadows,
+                                                ) ??
+                                                myTheme.textTheme?.titleLarge?.copyWith(
+                                                  color: itemTheme.textColor ?? itemTheme.symbolColor,
+                                                  shadows: itemTheme.textShadows,
+                                                ),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
+                                  displayIcons
+                                      ? Flexible(
+                                          flex: iconWidgetFlex,
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              ...List.generate(
+                                                widget.states[currStateValue]?.icons.length ?? widget.icons?.length ?? 0,
+                                                (index) {
+                                                  return Icon(
+                                                    widget.states[currStateValue]?.icons[index] ?? widget.icons![index],
+                                                    size: widget.iconSize,
+                                                    color: widget.iconsColor ?? itemTheme.symbolColor,
+                                                    shadows: widget.iconsShadow ?? itemTheme.shadow,
+                                                  );
+                                                },
+                                              )
+                                            ],
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
+                                  !widget.isNavigation
+                                      ? Flexible(
+                                          flex: textWidgetFlex,
+                                          child: Text(
+                                            widget.states[currStateValue]?.title ?? widget.title ?? "",
+                                            textAlign: TextAlign.center,
+                                            style: widget.textStyle?.copyWith(
+                                                  color: itemTheme.textColor ?? itemTheme.symbolColor,
+                                                  shadows: itemTheme.textShadows,
+                                                ) ??
+                                                myTheme.textTheme?.titleLarge?.copyWith(
+                                                  color: itemTheme.textColor ?? itemTheme.symbolColor,
+                                                  shadows: itemTheme.textShadows,
+                                                ),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
+                                ],
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                      // SizedBox(height: widget.textIconSpacing),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ));
+    });
+
+    return widget.position != null
+        ? Positioned(
+            top: widget.position!.y,
+            left: widget.position!.x,
+            child: selectionContent,
+          )
+        : selectionContent;
+  }
+}

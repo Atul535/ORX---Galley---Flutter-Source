@@ -1,0 +1,263 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../config/config_items.dart';
+import '../model/current_state.dart';
+import '../model/generic_selection.dart';
+import '../providers/current_state_provider.dart';
+import '../providers/custom_theme_provider.dart';
+import '../widgets/activity_detector.dart';
+import '../widgets/animated_ibutton.dart';
+import '../widgets/generic_selection_widget.dart';
+
+class CallMapScreen extends StatefulWidget {
+  const CallMapScreen({super.key, title});
+
+  static const routeName = '/app/callMap';
+
+  @override
+  State<CallMapScreen> createState() => _CallMapScreenState();
+}
+
+class _CallMapScreenState extends State<CallMapScreen> with AutomaticKeepAliveClientMixin {
+  String title = '';
+  Timer? timer;
+  final Map<String, GlobalKey> _buttonKeys = {};
+  bool _isFirstBuild = true;
+  DateTime _lastRebuildTime = DateTime.now();
+
+  // Cache for call buttons to prevent rebuilds
+  late List<dynamic> _callBtnProps;
+
+  @override
+  bool get wantKeepAlive => true; // Keep state when switching tabs
+
+  @override
+  void initState() {
+    super.initState();
+    _callBtnProps = configItems['callmap-calls'] as dynamic;
+
+    // Initialize button keys only once
+    for (var callBtn in _callBtnProps) {
+      String callId = callBtn.id.toString();
+      _buttonKeys[callId] = GlobalKey();
+    }
+
+    // Throttle rebuilds with a timer
+    timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (mounted && !_isFirstBuild && DateTime.now().difference(_lastRebuildTime).inMilliseconds > 400) {
+        setState(() {
+          // Just trigger a rebuild at controlled intervals
+          _lastRebuildTime = DateTime.now();
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
+    if (_isFirstBuild) {
+      _isFirstBuild = false;
+    }
+
+    GenericSelection callReset = configItems['callmap-reset']?.firstWhere((element) => element.id == 'callReset') as GenericSelection;
+    GenericSelection callAll = configItems['callmap-reset']?.firstWhere((element) => element.id == 'testCA') as GenericSelection;
+
+    CustomTheme myTheme = Provider.of<CustomThemes>(context, listen: true).getActiveTheme();
+
+    // Use a more efficient Consumer pattern for state access
+    return ActivityDetector(
+      child: Stack(
+        children: [
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20.0),
+              child: Image(
+                image: AssetImage('assets/YG039-LOPA_Final.png'),
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          // Efficient Consumer pattern
+          CallStateManager(
+            callBtnProps: _callBtnProps,
+            buttonKeys: _buttonKeys,
+          ),
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              ...[callReset, callAll].map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(left: 50, right: 50, top: 0, bottom: 0),
+                  child: Selector<CurrentStateProvider, int>(
+                    selector: (context, provider) => provider.getCurrentState(item.id.toString()),
+                    builder: (context, currStateValue, child) {
+                      return GenericSelectionWidget(
+                        id: item.id,
+                        title: item.title,
+                        icons: item.icons,
+                        iconSize: item.iconSize,
+                        isMomentary: item.isMomentary,
+                        onStateCallBack: () {
+                          // Reset all active calls when reset is pressed
+                          final provider = Provider.of<CurrentStateProvider>(context, listen: false);
+                          for (var callBtn in _callBtnProps) {
+                            String callId = callBtn.id.toString();
+                            int state = provider.getCurrentState(callId);
+                            if (state == 1) {
+                              provider.setCurrentState(callId, 0);
+                            }
+                          }
+                        },
+                        offStateCallBack: () {},
+                        height: item.height,
+                        width: item.width,
+                        textIconSpacing: 10,
+                        textStyle: myTheme.textTheme?.labelMedium,
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Separate widget to manage call states efficiently
+class CallStateManager extends StatelessWidget {
+  final List<dynamic> callBtnProps;
+  final Map<String, GlobalKey> buttonKeys;
+
+  const CallStateManager({
+    Key? key,
+    required this.callBtnProps,
+    required this.buttonKeys,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<CurrentStateProvider>(
+      // Memoize this consumer to avoid rebuilding if nothing changed
+      child: const SizedBox.shrink(), // Optional child that won't rebuild
+      builder: (context, currentStateProvider, child) {
+        // Get active call states and their IDs
+        List<CurrentState> activeCallStates = [];
+        for (var callBtn in callBtnProps) {
+          String callId = callBtn.id.toString();
+          CurrentState? state = currentStateProvider.getCurrentStateObject(callId);
+          if (state != null && state.currentState == 1) {
+            activeCallStates.add(state);
+          }
+        }
+
+        // Sort active calls by lastStateChangeTime, handling nulls
+        activeCallStates.sort((a, b) {
+          final timeA = a.lastStateChangeTime;
+          final timeB = b.lastStateChangeTime;
+
+          if (timeA == null || timeB == null) {
+            return (timeA == null ? 1 : 0) - (timeB == null ? 1 : 0);
+          }
+
+          return timeA.compareTo(timeB);
+        });
+
+        // Map of callId to priority for quick lookup
+        Map<String, int> priorityMap = {};
+        for (int i = 0; i < activeCallStates.length; i++) {
+          priorityMap[activeCallStates[i].id] = i;
+        }
+
+        // Highest priority call ID (may be null if no active calls)
+        String? highestPriorityId = activeCallStates.isNotEmpty ? activeCallStates.first.id : null;
+
+        return Stack(
+          children: callBtnProps.map((callBtnItem) {
+            final String callId = callBtnItem.id.toString();
+            final int callState = currentStateProvider.getCurrentState(callId);
+            final bool isActive = callState == 1;
+            final bool isHighestPriority = isActive && callId == highestPriorityId;
+            final int priority = isActive ? (priorityMap[callId] ?? -1) : -1;
+
+            return Positioned(
+              left: callBtnItem.position.x,
+              top: callBtnItem.position.y,
+              child: Stack(
+                children: [
+                  AnimatedIButton(
+                    key: buttonKeys[callId], // Use stable keys
+                    icon: isActive
+                        ? Icon(
+                            callBtnItem.icons.first,
+                            size: callBtnItem.iconSize,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.white,
+                                offset: Offset(0, 0),
+                                blurRadius: 1,
+                              ),
+                              Shadow(
+                                color: Colors.white,
+                                offset: Offset(0, 0),
+                                blurRadius: 1,
+                              )
+                            ],
+                            color: const Color(0xFF0039A6), // Other active calls
+                          )
+                        : const Icon(null),
+                    onPressed: () {
+                      if (!isActive) return;
+                      currentStateProvider.setCurrentState(callBtnItem.id, 0);
+                    },
+                    padding: const EdgeInsets.all(10),
+                    shouldAnimate: isHighestPriority, // Only animate highest priority
+                    angle: 40,
+                    duration: const Duration(milliseconds: 300),
+                  ),
+
+                  // Only show priority badge for active calls
+                  if (isActive)
+                    Positioned(
+                      right: -5,
+                      top: -5,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: isHighestPriority ? Colors.red : Colors.orange,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1),
+                        ),
+                        child: Text(
+                          '${priority + 1}', // 1-based for display
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+}

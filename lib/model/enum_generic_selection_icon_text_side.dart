@@ -1,0 +1,1 @@
+enum GenericSelectionIconTextSide { left, right }

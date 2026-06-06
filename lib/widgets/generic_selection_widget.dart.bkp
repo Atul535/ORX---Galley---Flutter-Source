@@ -1,0 +1,1361 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../managers/global_touch_manager.dart';
+import '../model/component_state.dart';
+import '../model/enum_generic_selection_icon_text_side.dart';
+import '../model/generic_selection.dart';
+import '../model/image_state.dart';
+import '../model/position_model.dart';
+import '../providers/current_state_provider.dart';
+
+import '../providers/custom_theme_provider.dart';
+import '../model/theme/item_theme.dart';
+import '../utils/logger.dart';
+import 'cfg_image.dart';
+
+// enum to define the side of the button in case we want to create a group of buttons
+// we want to have button thats on the left side or right side or in the center of the group
+enum GenericSelelectionWidgetButtonSide { left, right, middle, none }
+
+class GenericSelectionWidget extends StatefulWidget {
+  final String? id;
+  final String? title;
+  final List<IconData>? icons;
+  final double iconSize;
+  final String provider;
+  final bool isMomentary;
+  final String? route;
+  final VoidCallback onStateCallBack;
+  final VoidCallback offStateCallBack;
+  final bool isSlider;
+  final int delayMilliseconds;
+  final double height;
+  final double width;
+  final double textIconSpacing;
+  final Map<int, GenericSelectionState> states;
+  final GenericSelelectionWidgetButtonSide side;
+  final List<double> marginLRTB;
+  final TextStyle? textStyle;
+  final bool isNavigation;
+  final Color? iconsColor;
+  final List<Shadow>? iconsShadow;
+  final Position? position;
+  final bool isTransparent;
+  final BorderRadius? borderRadius;
+  final Color? color;
+  final int? textWidgetFlex;
+  final int? iconWidgetFlex;
+  final List<double>? imageSize;
+  final String? backgroundImage;
+  final Alignment? textAlignment; // ⭐ NOVÝ - zarovnání textu
+  final LinearGradient? textOverlayGradient; // ⭐ NOVÝ - gradient pod textem
+  final LinearGradient? imageOverlayGradient; // ⭐ NOVÝ - gradient přes image
+  final LinearGradient? imageOverlayGradientActive; // ⭐ NOVÝ - gradient když je aktivní
+  final LinearGradient? imageOverlayGradientInactive;
+  final bool removeBtnBackgroundStyling;
+  final bool grayscaleWhenOff;
+  final bool keepContentWhenTransparent;
+  final String? customThemeKey;
+  final StateThemeMap? customItemThemeByState;
+  final bool iconTextInline;
+  final GenericSelectionIconTextSide iconTextSide;
+  final int inlineTextMaxLines;
+  final TextOverflow inlineTextOverflow;
+
+  GenericSelectionWidget({
+    Key? key,
+    id,
+    this.title,
+    this.icons = const [],
+    this.iconSize = 100,
+    this.iconsColor,
+    this.provider = "",
+    this.isMomentary = false,
+    this.route,
+    this.onStateCallBack = emptyOnStateCallBack,
+    this.offStateCallBack = emptyOffStateCallBack,
+    this.isSlider = false,
+    this.delayMilliseconds = 25,
+    this.height = 150,
+    this.width = 150,
+    this.textIconSpacing = 10,
+    this.side = GenericSelelectionWidgetButtonSide.none,
+    this.marginLRTB = const [0.0, 0.0, 0.0, 0.0],
+    this.textStyle,
+    this.isNavigation = false,
+    this.iconsShadow,
+    this.position,
+    this.isTransparent = false,
+    this.borderRadius,
+    this.color,
+    this.textWidgetFlex,
+    this.iconWidgetFlex,
+    this.imageSize,
+    this.backgroundImage,
+    this.textAlignment,
+    this.textOverlayGradient,
+    this.removeBtnBackgroundStyling = false,
+    this.imageOverlayGradient,
+    this.imageOverlayGradientActive,
+    this.imageOverlayGradientInactive,
+    this.keepContentWhenTransparent = false,
+    this.grayscaleWhenOff = false,
+    this.customThemeKey,
+    this.customItemThemeByState,
+    this.iconTextInline = false,
+    this.iconTextSide = GenericSelectionIconTextSide.left,
+    this.inlineTextMaxLines = 1,
+    this.inlineTextOverflow = TextOverflow.ellipsis,
+    Map<int, GenericSelectionState>? states,
+  })  : id = id ?? UniqueKey().toString(),
+        states = states ?? const {},
+        super(key: key);
+
+  // Creates a widget from a GenericSelection config item without breaking existing usages.
+  // Existing constructor stays unchanged; this is just a convenience initializer.
+  GenericSelectionWidget.fromSelection({
+    Key? key,
+    required GenericSelection item,
+
+    // Optional overrides
+    VoidCallback onStateCallBack = emptyOnStateCallBack,
+    VoidCallback offStateCallBack = emptyOffStateCallBack,
+    String provider = "",
+    bool isNavigation = false,
+    bool isTransparent = false,
+    bool removeBtnBackgroundStyling = false,
+    bool grayscaleWhenOff = false,
+    bool keepContentWhenTransparent = false,
+    StateThemeMap? customItemThemeByState,
+    TextStyle? textStyle,
+    Alignment? textAlignment,
+    LinearGradient? textOverlayGradient,
+    LinearGradient? imageOverlayGradient,
+    LinearGradient? imageOverlayGradientActive,
+    LinearGradient? imageOverlayGradientInactive,
+  }) : this(
+          key: key,
+          id: item.id,
+          title: item.title,
+          icons: item.icons,
+          iconSize: item.iconSize,
+          height: item.height,
+          width: item.width,
+          textIconSpacing: item.textIconSpacing,
+          borderRadius: item.borderRadius is BorderRadius ? item.borderRadius as BorderRadius : null,
+          color: item.color,
+          iconsColor: item.iconsColor,
+          iconsShadow: item.iconsShadow,
+          textStyle: textStyle,
+          position: item.position,
+          // marginLRTB: item.marginLRTB,
+          provider: provider,
+          isMomentary: item.isMomentary,
+          route: item.route,
+          onStateCallBack: onStateCallBack,
+          offStateCallBack: offStateCallBack,
+          isNavigation: isNavigation,
+          isTransparent: isTransparent,
+          removeBtnBackgroundStyling: removeBtnBackgroundStyling,
+          grayscaleWhenOff: grayscaleWhenOff,
+          keepContentWhenTransparent: keepContentWhenTransparent,
+          customThemeKey: item.customThemeKey,
+          customItemThemeByState: customItemThemeByState,
+          states: item.states,
+          textAlignment: textAlignment,
+          textOverlayGradient: textOverlayGradient,
+          imageOverlayGradient: imageOverlayGradient,
+          imageOverlayGradientActive: imageOverlayGradientActive,
+          imageOverlayGradientInactive: imageOverlayGradientInactive,
+        );
+
+  static void emptyOnStateCallBack() {}
+  static void emptyOffStateCallBack() {}
+
+  @override
+  State<GenericSelectionWidget> createState() => _GenericSelectionWidgetState();
+}
+
+class _GenericSelectionWidgetState extends State<GenericSelectionWidget> {
+  bool _released = false;
+  Timer? _momentaryResetTimer;
+  DateTime? _touchStartTime;
+  bool _isHeld = false;
+  bool _hasBeenHeldLongEnough = false;
+  int? _primaryPointerId;
+  bool _forceReset = false;
+
+  void _navigateIfNeeded(BuildContext context, int currStateValue) {
+    final String? route = widget.states[currStateValue]?.route;
+    logDebug("GenericSelectionWidget", "Navigating to $route");
+    if (route != null && route.isNotEmpty) {
+      Navigator.of(context).pushNamed(route);
+      _momentaryResetTimer?.cancel();
+    }
+  }
+
+  void _resetMomentaryButton(BuildContext context) {
+    if (widget.isMomentary && _isHeld) {
+      _isHeld = false;
+      Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+      widget.offStateCallBack();
+      GlobalTouchManager.releaseTouch();
+      logDebug("GenericSelectionWidget", "Force reset momentary button");
+    }
+  }
+
+  TextAlign _getTextAlignFromAlignment(Alignment alignment) {
+    if (alignment.x < -0.3) {
+      return TextAlign.left;
+    } else if (alignment.x > 0.3) {
+      return TextAlign.right;
+    } else {
+      return TextAlign.center;
+    }
+  }
+
+  @override
+  void dispose() {
+    _momentaryResetTimer?.cancel();
+    super.dispose();
+  }
+
+  Widget _buildInlineIconText({
+    required CustomTheme myTheme,
+    required ItemTheme itemTheme,
+    required int currStateValue,
+    required List<IconData> currentStateIcons,
+    required bool displayIcons,
+    required bool displayImages,
+    ImageState? currentImageState,
+  }) {
+    final String text = widget.states[currStateValue]?.title ?? widget.title ?? '';
+
+    final TextStyle effectiveTextStyle = widget.textStyle?.copyWith(
+          color: itemTheme.textColor ?? itemTheme.symbolColor,
+          shadows: itemTheme.textShadows,
+        ) ??
+        (myTheme.textTheme?.titleLarge?.copyWith(
+              color: itemTheme.textColor ?? itemTheme.symbolColor,
+              shadows: itemTheme.textShadows,
+            ) ??
+            const TextStyle());
+
+    // Icons to render (state icons > widget icons)
+    final List<IconData> iconsToUse = currentStateIcons.isNotEmpty ? currentStateIcons : (widget.icons ?? const []);
+
+    final List<Widget> iconWidgets = iconsToUse
+        .map(
+          (ic) => Icon(
+            ic,
+            size: widget.iconSize,
+            color: widget.iconsColor ?? itemTheme.symbolColor,
+            shadows: widget.iconsShadow ?? itemTheme.shadow,
+          ),
+        )
+        .toList();
+
+    // Optional image support (if you want inline image instead of icons)
+    Widget? imageWidget;
+    if (displayImages && currentImageState != null) {
+      imageWidget = CfgImage(
+        currentImageState.imagePath,
+        width: widget.imageSize != null && widget.imageSize!.isNotEmpty ? widget.imageSize![0] : widget.iconSize,
+        height: widget.imageSize != null && widget.imageSize!.length > 1 ? widget.imageSize![1] : widget.iconSize,
+        fit: BoxFit.contain,
+      );
+    }
+
+    final bool hasAnyIconOrImage = (displayIcons && iconWidgets.isNotEmpty) || (displayImages && imageWidget != null);
+    final bool hasText = text.isNotEmpty;
+
+    if (!hasAnyIconOrImage && !hasText) return const SizedBox.shrink();
+
+    final spacing = SizedBox(width: widget.textIconSpacing);
+
+    final textWidget = Flexible(
+      child: Text(
+        text,
+        maxLines: widget.inlineTextMaxLines,
+        overflow: widget.inlineTextOverflow,
+        softWrap: false,
+        textAlign: TextAlign.center,
+        style: effectiveTextStyle,
+      ),
+    );
+
+    // pick either icons row or image
+    final Widget? leadingVisual = displayImages ? imageWidget : (iconWidgets.isNotEmpty ? Row(mainAxisSize: MainAxisSize.min, children: iconWidgets) : null);
+
+    List<Widget> rowChildren;
+
+    if (widget.iconTextSide == GenericSelectionIconTextSide.left) {
+      rowChildren = [
+        if (leadingVisual != null) leadingVisual,
+        if (leadingVisual != null && hasText) spacing,
+        if (hasText) textWidget,
+      ];
+    } else {
+      rowChildren = [
+        if (hasText) textWidget,
+        if (leadingVisual != null && hasText) spacing,
+        if (leadingVisual != null) leadingVisual,
+      ];
+    }
+
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center, // ✅ vertical align middle
+        children: rowChildren,
+      ),
+    );
+  }
+
+  int _nextStateValue(int current) {
+    // když nejsou definované stavy, fallback na původní toggle
+    if (widget.states.isEmpty) {
+      return current == 0 ? 1 : 0;
+    }
+
+    // seřazené klíče stavů (např. [0,1,2,5])
+    final keys = widget.states.keys.toList()..sort();
+
+    // chceme vždycky mít možnost vrátit se na 0
+    // pokud není 0 definovaná, bereme "první" jako start a po posledním jdeme na něj
+    final int zeroOrFirst = keys.contains(0) ? 0 : keys.first;
+
+    // pokud current není mezi klíči:
+    // - pokud current < první -> jdi na první
+    // - pokud current > poslední -> jdi na 0 (nebo první, pokud 0 neexistuje)
+    if (!keys.contains(current)) {
+      if (current < keys.first) return keys.first;
+      return zeroOrFirst;
+    }
+
+    final idx = keys.indexOf(current);
+    if (idx < 0) return zeroOrFirst;
+
+    // poslední -> zpět na 0 (nebo first)
+    if (idx == keys.length - 1) return zeroOrFirst;
+
+    // jinak další
+    return keys[idx + 1];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    CustomTheme myTheme = Provider.of<CustomThemes>(context, listen: true).getActiveTheme();
+    // ItemTheme itemTheme = myTheme.selectionItemThemeInactive as ItemTheme;
+
+    bool displayIcons = true;
+    bool displayImages = false;
+    int textWidgetFlex = 2;
+    int iconWidgetFlex = 5;
+
+    if (widget.isNavigation) {
+      textWidgetFlex = 5;
+      iconWidgetFlex = 2;
+    }
+
+    if (widget.textWidgetFlex != null && widget.iconWidgetFlex != null) {
+      logDebug("GenericSelectionWidget", "Using custom flex values for text and icon widgets as ${widget.textWidgetFlex} and ${widget.iconWidgetFlex}");
+      textWidgetFlex = widget.textWidgetFlex!;
+      iconWidgetFlex = widget.iconWidgetFlex!;
+    }
+
+    Widget selectionContent = Selector<CurrentStateProvider, ({int state, bool isInhibited})>(selector: (context, provider) {
+      final stateObject = provider.getCurrentStateObject(widget.id ?? '');
+      return (state: stateObject.currentState, isInhibited: stateObject.isInhibited);
+    }, builder: (context, values, child) {
+      int currStateValue = values.state;
+      bool isActive = currStateValue == 1;
+
+      bool isInhibited = values.isInhibited;
+
+      bool isTouchDisabled = widget.states[currStateValue]?.touchDisabled ?? widget.states[0]?.touchDisabled ?? false;
+
+      final ItemTheme itemTheme = myTheme.resolveSelectionTheme(
+        state: currStateValue,
+        themeKey: widget.customThemeKey ?? widget.id, // key do mapy v theme
+        override: widget.customItemThemeByState, // když pošleš mapu přímo, vyhraje
+      );
+
+      if (widget.id == "allLightsOn") {
+        logInfo("GenericSelectionWidget", "WidgetId: ${widget.id}, isActive: $isActive, isInhibited: $isInhibited, isTouchDisabled: $isTouchDisabled");
+      }
+
+      // Get current state's icons and images
+      List<IconData> currentStateIcons = widget.states[currStateValue]?.icons ?? [];
+      List<ImageState> currentStateImages = widget.states[currStateValue]?.imageState ?? [];
+      logInfo("GenericSelectionWidget", "WidgetIds:${widget.id}, Current State:$currStateValue");
+      logInfo("GenericSelectionWidget", "Current State Images:$currentStateImages");
+
+      // Determine what to display - priority: state icons > widget icons > state images > nothing
+      if (currentStateIcons.isNotEmpty) {
+        // Current state has icons
+        displayIcons = true;
+        displayImages = false;
+        logInfo("GenericSelectionWidget", "Current State has Icons:$currentStateIcons");
+      } else if (widget.icons != null && widget.icons!.isNotEmpty) {
+        // No state icons, but widget has default icons
+        displayIcons = true;
+        displayImages = false;
+        logInfo("GenericSelectionWidget", "Widget has default Icons:${widget.icons}");
+      } else if (currentStateImages.isNotEmpty) {
+        // No icons, but current state has images
+        displayIcons = false;
+        displayImages = true;
+        logInfo("GenericSelectionWidget", "Current State has Images:$currentStateImages");
+      } else {
+        // Nothing to display
+        displayIcons = false;
+        displayImages = false;
+        logInfo("GenericSelectionWidget", "No icons or images to display");
+      }
+
+        final ImageState? currentImageState = displayImages && currentStateImages.isNotEmpty ? currentStateImages[0] : null;
+        final bool shouldGray = widget.grayscaleWhenOff && !isActive;
+
+        final bool useOverlayText = !widget.isTransparent &&
+            !widget.isNavigation &&
+            widget.backgroundImage != null &&
+            widget.textAlignment != null &&
+            (widget.title != null || widget.states[currStateValue]?.title != null);
+
+        LinearGradient? overlayGradient;
+        if (!widget.isTransparent && widget.backgroundImage != null) {
+          if (isActive && widget.imageOverlayGradientActive != null) {
+            overlayGradient = widget.imageOverlayGradientActive;
+          } else if (!isActive && widget.imageOverlayGradientInactive != null) {
+            overlayGradient = widget.imageOverlayGradientInactive;
+          } else {
+            overlayGradient = widget.imageOverlayGradient;
+          }
+        }
+
+        final BorderRadius? effectiveRadius = !widget.isTransparent && !widget.removeBtnBackgroundStyling
+            ? (widget.side == GenericSelelectionWidgetButtonSide.left
+                ? itemTheme.borderRadius?.copyWith(
+                      topLeft: itemTheme.borderRadius?.topLeft ?? const Radius.circular(20),
+                      bottomLeft: itemTheme.borderRadius?.bottomLeft ?? const Radius.circular(20),
+                      topRight: Radius.zero,
+                      bottomRight: Radius.zero,
+                    ) ??
+                    BorderRadius.only(
+                      topLeft: itemTheme.borderRadius?.topRight ?? const Radius.circular(20),
+                      bottomLeft: itemTheme.borderRadius?.bottomRight ?? const Radius.circular(20),
+                      topRight: Radius.zero,
+                      bottomRight: Radius.zero,
+                    )
+                : widget.side == GenericSelelectionWidgetButtonSide.right
+                    ? itemTheme.borderRadius?.copyWith(
+                          topRight: itemTheme.borderRadius?.topRight ?? const Radius.circular(20),
+                          bottomRight: itemTheme.borderRadius?.bottomRight ?? const Radius.circular(20),
+                          topLeft: Radius.zero,
+                          bottomLeft: Radius.zero,
+                        ) ??
+                        BorderRadius.only(
+                          topRight: itemTheme.borderRadius?.topLeft ?? const Radius.circular(20),
+                          bottomRight: itemTheme.borderRadius?.bottomLeft ?? const Radius.circular(20),
+                          topLeft: Radius.zero,
+                          bottomLeft: Radius.zero,
+                        )
+                    : widget.side == GenericSelelectionWidgetButtonSide.middle
+                        ? itemTheme.borderRadius?.copyWith(
+                              topLeft: Radius.zero,
+                              bottomLeft: Radius.zero,
+                              topRight: Radius.zero,
+                              bottomRight: Radius.zero,
+                            ) ??
+                            const BorderRadius.only(
+                              topLeft: Radius.zero,
+                              bottomLeft: Radius.zero,
+                              topRight: Radius.zero,
+                              bottomRight: Radius.zero,
+                            )
+                        : widget.borderRadius ?? itemTheme.borderRadius ?? BorderRadius.circular(20))
+            : null;
+
+        final Border? effectiveBorder = (!widget.isTransparent && !widget.removeBtnBackgroundStyling) ? itemTheme.border : null;
+
+        Widget buildImageState() {
+          if (!displayImages || currentImageState == null) {
+            return const SizedBox.shrink();
+          }
+
+          return Flexible(
+            flex: iconWidgetFlex,
+            child: ColorFiltered(
+              colorFilter: currentImageState.imageEffect == ImageEffect.grayscale
+                  ? const ColorFilter.matrix(<double>[
+                      0.2126,
+                      0.7152,
+                      0.0722,
+                      0,
+                      0,
+                      0.2126,
+                      0.7152,
+                      0.0722,
+                      0,
+                      0,
+                      0.2126,
+                      0.7152,
+                      0.0722,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      1,
+                      0,
+                    ])
+                  : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
+              child: CfgImage(
+                currentImageState.imagePath,
+                width: widget.imageSize != null && widget.imageSize!.isNotEmpty ? widget.imageSize![0] : null,
+                height: widget.imageSize != null && widget.imageSize!.length > 1 ? widget.imageSize![1] : null,
+                fit: widget.imageFit,
+              ),
+            ),
+          );
+        }
+
+        Widget buildIcons() {
+          if (!displayIcons) {
+            return const SizedBox.shrink();
+          }
+
+          return Flexible(
+            flex: iconWidgetFlex,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ...List.generate(
+                  currentStateIcons.isNotEmpty ? currentStateIcons.length : (widget.icons?.length ?? 0),
+                  (index) => Icon(
+                    currentStateIcons.isNotEmpty ? currentStateIcons[index] : widget.icons![index],
+                    size: widget.iconSize,
+                    color: widget.iconsColor ?? itemTheme.symbolColor,
+                    shadows: widget.iconsShadow ?? itemTheme.shadow,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        Widget buildNavigationTitle() {
+          final String title = widget.states[currStateValue]?.title ?? widget.title ?? "";
+          if (!widget.isNavigation || title.isEmpty) {
+            return const SizedBox.shrink();
+          }
+
+          return Flexible(
+            flex: textWidgetFlex,
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              style: widget.textStyle?.copyWith(
+                    color: itemTheme.textColor ?? itemTheme.symbolColor,
+                    shadows: itemTheme.textShadows,
+                  ) ??
+                  myTheme.textTheme?.bodyMedium?.copyWith(
+                    color: itemTheme.textColor ?? itemTheme.symbolColor,
+                    shadows: itemTheme.textShadows,
+                  ),
+            ),
+          );
+        }
+
+        Widget buildBottomText({required bool includeBottomText}) {
+          final String title = widget.states[currStateValue]?.title ?? widget.title ?? "";
+          if (widget.isNavigation || !includeBottomText || title.isEmpty) {
+            return const SizedBox.shrink();
+          }
+
+          return Flexible(
+            flex: textWidgetFlex,
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              style: widget.textStyle?.copyWith(
+                    color: itemTheme.textColor ?? itemTheme.symbolColor,
+                    shadows: itemTheme.textShadows,
+                  ) ??
+                  myTheme.textTheme?.bodyMedium?.copyWith(
+                    color: itemTheme.textColor ?? itemTheme.symbolColor,
+                    shadows: itemTheme.textShadows,
+                  ),
+            ),
+          );
+        }
+
+        Widget buildLegacyContent({required bool includeBottomText}) {
+          return Flex(
+            direction: Axis.vertical,
+            mainAxisAlignment: (displayIcons || displayImages) ? MainAxisAlignment.spaceEvenly : MainAxisAlignment.center,
+            children: [
+              buildNavigationTitle(),
+              buildIcons(),
+              buildImageState(),
+              buildBottomText(includeBottomText: includeBottomText),
+            ],
+          );
+        }
+
+        Widget buildOverlayTextContent() {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Center(
+                child: Flex(
+                  direction: Axis.vertical,
+                  mainAxisAlignment: (displayIcons || displayImages) ? MainAxisAlignment.spaceEvenly : MainAxisAlignment.center,
+                  children: [
+                    buildNavigationTitle(),
+                    buildIcons(),
+                    buildImageState(),
+                    Flexible(
+                      flex: textWidgetFlex,
+                      child: const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              ),
+              Align(
+                alignment: widget.textAlignment!,
+                child: Container(
+                  width: double.infinity,
+                  decoration: widget.textOverlayGradient != null ? BoxDecoration(gradient: widget.textOverlayGradient) : null,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Text(
+                    widget.states[currStateValue]?.title ?? widget.title ?? "",
+                    textAlign: _getTextAlignFromAlignment(widget.textAlignment!),
+                    style: widget.textStyle?.copyWith(
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withOpacity(0.8),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ) ??
+                        const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        Widget buildForegroundContent() {
+          if (widget.isTransparent && !widget.keepContentWhenTransparent) {
+            return const SizedBox.shrink();
+          }
+
+          if (widget.iconTextInline) {
+            return Center(
+              child: _buildInlineIconText(
+                myTheme: myTheme,
+                itemTheme: itemTheme,
+                currStateValue: currStateValue,
+                currentStateIcons: currentStateIcons,
+                displayIcons: displayIcons,
+                displayImages: displayImages,
+                currentImageState: currentImageState,
+              ),
+            );
+          }
+
+          return useOverlayText ? buildOverlayTextContent() : buildLegacyContent(includeBottomText: true);
+        }
+
+        Widget buildVisualBody(BoxConstraints constraints) {
+          final bool wantsExpandedWidth = widget.width == double.infinity;
+          final bool wantsExpandedHeight = widget.height == double.infinity;
+          final bool canExpandWidth = wantsExpandedWidth && constraints.hasBoundedWidth;
+          final bool canExpandHeight = wantsExpandedHeight && constraints.hasBoundedHeight;
+
+          final double? effectiveWidth = wantsExpandedWidth ? null : widget.width;
+          final double? effectiveHeight = wantsExpandedHeight ? null : widget.height;
+
+          final BoxConstraints? effectiveConstraints = (canExpandWidth || canExpandHeight)
+              ? BoxConstraints(
+                  minWidth: canExpandWidth ? constraints.maxWidth : 0,
+                  maxWidth: canExpandWidth ? constraints.maxWidth : double.infinity,
+                  minHeight: canExpandHeight ? constraints.maxHeight : 0,
+                  maxHeight: canExpandHeight ? constraints.maxHeight : double.infinity,
+                )
+              : null;
+
+          return ColorFiltered(
+            colorFilter: shouldGray
+                ? const ColorFilter.matrix(<double>[
+                    0.2126,
+                    0.7152,
+                    0.0722,
+                    0,
+                    0,
+                    0.2126,
+                    0.7152,
+                    0.0722,
+                    0,
+                    0,
+                    0.2126,
+                    0.7152,
+                    0.0722,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                  ])
+                : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
+            child: Container(
+              width: effectiveWidth,
+              height: effectiveHeight,
+              constraints: effectiveConstraints,
+              decoration: BoxDecoration(
+                border: effectiveBorder,
+                color: (!widget.isTransparent && !widget.removeBtnBackgroundStyling && widget.backgroundImage == null)
+                    ? (widget.color != Colors.transparent ? (widget.color ?? itemTheme.backroundColor) : itemTheme.backroundColor)
+                    : widget.color,
+                gradient: (!widget.isTransparent && !widget.removeBtnBackgroundStyling && widget.backgroundImage == null) ? itemTheme.gradient : null,
+                borderRadius: effectiveRadius,
+                boxShadow: (!widget.isTransparent && !widget.removeBtnBackgroundStyling) ? itemTheme.boxShadow : null,
+              ),
+              clipBehavior: Clip.antiAlias,
+              alignment: Alignment.center,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (widget.backgroundImage != null)
+                    CfgImage(
+                      widget.backgroundImage!,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                    ),
+                  if (overlayGradient != null)
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: overlayGradient,
+                      ),
+                    ),
+                  buildForegroundContent(),
+                ],
+              ),
+            ),
+          );
+        }
+
+        Widget content = Listener(
+          onPointerDown: (PointerDownEvent event) {
+            logDebug("GenericSelectionWidget", "onPointerDown: pointer=${event.pointer}, kind=${event.kind}");
+            if (_primaryPointerId == null) {
+              _primaryPointerId = event.pointer;
+            }
+          },
+          onPointerUp: (PointerUpEvent event) {
+            logDebug("GenericSelectionWidget", "onPointerUp: pointer=${event.pointer}, primary=$_primaryPointerId");
+            if (_primaryPointerId == event.pointer) {
+              _primaryPointerId = null;
+              if (widget.isMomentary && _isHeld) {
+                Future.microtask(() => _resetMomentaryButton(context));
+              }
+            }
+          },
+          onPointerCancel: (PointerCancelEvent event) {
+            logDebug("GenericSelectionWidget", "onPointerCancel: pointer=${event.pointer}, primary=$_primaryPointerId");
+            if (_primaryPointerId == event.pointer) {
+              _primaryPointerId = null;
+              if (widget.isMomentary && _isHeld) {
+                Future.microtask(() => _resetMomentaryButton(context));
+              }
+            }
+          },
+          child: GestureDetector(
+            onPanDown: (details) {
+              logDebug("GenericSelectionWidget **************************************", "onPanDown: Started");
+              if (isTouchDisabled || isInhibited || !GlobalTouchManager.canTouch()) {
+                logDebug("GenericSelectionWidget", "onPanDown: Touch disabled");
+                return;
+              }
+
+                  GlobalTouchManager.activateTouch(); // Prevent multitouch
+                  logDebug("GenericSelectionWidget", "onPanDown: Touch activated");
+                  _touchStartTime = DateTime.now(); // Track touch start time
+
+                  _hasBeenHeldLongEnough = false;
+
+                  _momentaryResetTimer?.cancel();
+
+                  if (!widget.isMomentary) {
+                    logDebug("GenericSelectionWidget", "onPanDown: Non-momentary button");
+                    // Toggle the non-momentary button immediately on press
+                    if (isActive) {
+                      widget.onStateCallBack();
+                    } else {
+                      widget.offStateCallBack();
+                    }
+
+                    final next = _nextStateValue(currStateValue);
+                    logDebug("GenericSelectionWidget", "Changing state from $currStateValue to $next");
+
+                    Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), next);
+                    GlobalTouchManager.releaseTouch();
+                    // Handle navigation if needed
+                  } else {
+                    logDebug("GenericSelectionWidget", "onPanDown: Momentary button");
+                    // Cancel any existing timer to prevent unexpected reset
+                    _momentaryResetTimer?.cancel();
+
+                    // For momentary buttons, set active and ensure it stays highlighted for at least 250ms
+                    Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 1);
+                    widget.onStateCallBack();
+                    _isHeld = true;
+                    _released = false;
+
+                    logDebug("GenericSelectionWidget", "onPanDown: Momentary button activated, starting timer");
+                    _momentaryResetTimer = Timer(const Duration(milliseconds: 250), () {
+                      logDebug("GenericSelectionWidget", "onPanDown: Momentary button timer expired, release $_released");
+                      _hasBeenHeldLongEnough = true;
+                      if (_released) {
+                        logDebug("GenericSelectionWidget", "onPanDown: Momentary button released before 250ms, resetting");
+                        Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                        widget.offStateCallBack();
+
+                        GlobalTouchManager.releaseTouch();
+                      }
+                    });
+                  }
+                  logDebug("GenericSelectionWidget", "onPanDown: going to navigateIfNeeded");
+                  _navigateIfNeeded(context, currStateValue);
+                },
+                onPanUpdate: (details) {
+                  logDebug("GenericSelectionWidget", "onPanUpdate: Finger moved by ${details.delta.dx.abs()} and ${details.delta.dy.abs()}");
+
+                  // If significant movement is detected (>2px in any direction), treat as a release
+                  if (widget.isMomentary && _isHeld && (details.delta.dx.abs() > 2 || details.delta.dy.abs() > 2)) {
+                    logDebug("GenericSelectionWidget", "onPanUpdate: Cancelling due to movement");
+                    _isHeld = false;
+                    Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                    widget.offStateCallBack();
+                    GlobalTouchManager.releaseTouch();
+                  }
+                },
+                onHorizontalDragUpdate: (details) {
+                  if (widget.isMomentary) {
+                    _momentaryResetTimer?.cancel();
+                    Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                    GlobalTouchManager.releaseTouch();
+                  }
+                },
+                onPanEnd: (details) {
+                  logDebug("GenericSelectionWidget", "onPanEnd: Started");
+                  if (widget.isMomentary) {
+                    final elapsedTime = DateTime.now().difference(_touchStartTime ?? DateTime.now()).inMilliseconds;
+                    _isHeld = false;
+                    if (elapsedTime < 250) {
+                      // Ensure button remains active for at least 250ms
+                      final int remainingTime = 250 - elapsedTime;
+                      logDebug("GenericSelectionWidget", "Quick tap detected! Ensuring active state for extra $remainingTime ms");
+
+                      _momentaryResetTimer = Timer(Duration(milliseconds: remainingTime), () {
+                        if (!_isHeld) {
+                          Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                          widget.offStateCallBack();
+                          logDebug("GenericSelectionWidget", "Momentary button released after delay");
+                        }
+                      });
+                    } else {
+                      Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                      widget.offStateCallBack();
+                    }
+                  }
+                  _primaryPointerId = null; // Reset primary pointer ID
+                  GlobalTouchManager.releaseTouch();
+                },
+                onLongPressCancel: () {
+                  logDebug("GenericSelectionWidget", "onLongPressCancel: Started");
+                  _released = true;
+                  _isHeld = false;
+                  if (!_hasBeenHeldLongEnough) {
+                    // Only cancel if it didn't reach 250ms
+                    logDebug("GenericSelectionWidget", "onLongPressCancel: Ignored, button hasn't been held long enough.");
+                    return;
+                  }
+
+                  if (_momentaryResetTimer != null && _momentaryResetTimer!.isActive) {
+                    logDebug("GenericSelectionWidget", "onLongPressCancel: Canceling momentary reset timer");
+                    _momentaryResetTimer!.cancel(); // Prevent early deactivation
+                  }
+
+                  if (widget.isMomentary) {
+                    Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                    widget.offStateCallBack();
+                    logDebug("GenericSelectionWidget", "Momentary button canceled");
+                  }
+
+                  logDebug("GenericSelectionWidget", "onLongPressCancel: Touch released");
+                  GlobalTouchManager.releaseTouch();
+                },
+                onLongPressDown: (details) {
+                  logDebug("GenericSelectionWidget", "onLongPressDown: Started");
+                  if (isTouchDisabled || !GlobalTouchManager.canTouch()) {
+                    logDebug("GenericSelectionWidget", "onLongPressDown: Touch disabled");
+                    return;
+                  }
+
+                  GlobalTouchManager.activateTouch(); // Prevent multitouch
+                  _isHeld = true;
+
+                  if (widget.isMomentary) {
+                    logDebug("GenericSelectionWidget", "onLongPressDown: Momentary button");
+                    _momentaryResetTimer?.cancel(); // Cancel any prior timer
+                    Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 1);
+                    widget.onStateCallBack();
+                  }
+                  _navigateIfNeeded(context, currStateValue);
+                },
+                onLongPressUp: () {
+                  logDebug("GenericSelectionWidget", "onLongPressUp: Started");
+                  if (isTouchDisabled) {
+                    return;
+                  }
+                  _isHeld = false;
+
+                  if (widget.isMomentary) {
+                    logDebug("GenericSelectionWidget", "onLongPressUp: Momentary button");
+                    Provider.of<CurrentStateProvider>(context, listen: false).setCurrentState(widget.id.toString(), 0);
+                    widget.offStateCallBack();
+                  }
+
+                  _primaryPointerId = null; // Reset primary pointer ID
+                  GlobalTouchManager.releaseTouch(); // Release the touch flag
+                },
+                child: Container(
+                  margin: EdgeInsets.fromLTRB(
+                    widget.marginLRTB[0],
+                    widget.marginLRTB[1],
+                    widget.marginLRTB[2],
+                    widget.marginLRTB[3],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Builder(
+                        builder: (context) {
+                          final bool isActive = currStateValue == 1;
+
+                          // ✅ grayscale pro OFF stav (aplikuje se i na backgroundImage)
+                          final bool shouldGray = widget.grayscaleWhenOff && !isActive;
+
+                          // ✅ overlay text použijeme jen v tom "novém" režimu
+                          //    (aby se nerozbily ostatní widgety, které dřív měly text dole)
+                          final bool useOverlayText = !widget.isTransparent &&
+                              !widget.isNavigation &&
+                              widget.backgroundImage != null &&
+                              widget.textAlignment != null &&
+                              (widget.title != null || widget.states[currStateValue]?.title != null);
+
+                          // ✅ vyber overlay gradient (active / inactive / default)
+                          LinearGradient? overlayGradient;
+                          if (!widget.isTransparent && widget.backgroundImage != null) {
+                            if (isActive && widget.imageOverlayGradientActive != null) {
+                              overlayGradient = widget.imageOverlayGradientActive;
+                            } else if (!isActive && widget.imageOverlayGradientInactive != null) {
+                              overlayGradient = widget.imageOverlayGradientInactive;
+                            } else {
+                              overlayGradient = widget.imageOverlayGradient; // fallback
+                            }
+                          }
+
+                          // ✅ borderRadius stejnou logikou jako dřív
+                          final BorderRadius? effectiveRadius = !widget.isTransparent && !widget.removeBtnBackgroundStyling
+                              ? (widget.side == GenericSelelectionWidgetButtonSide.left
+                                  ? itemTheme.borderRadius?.copyWith(
+                                        topLeft: itemTheme.borderRadius?.topLeft ?? const Radius.circular(20),
+                                        bottomLeft: itemTheme.borderRadius?.bottomLeft ?? const Radius.circular(20),
+                                        topRight: Radius.zero,
+                                        bottomRight: Radius.zero,
+                                      ) ??
+                                      BorderRadius.only(
+                                        topLeft: itemTheme.borderRadius?.topRight ?? const Radius.circular(20),
+                                        bottomLeft: itemTheme.borderRadius?.bottomRight ?? const Radius.circular(20),
+                                        topRight: Radius.zero,
+                                        bottomRight: Radius.zero,
+                                      )
+                                  : widget.side == GenericSelelectionWidgetButtonSide.right
+                                      ? itemTheme.borderRadius?.copyWith(
+                                            topRight: itemTheme.borderRadius?.topRight ?? const Radius.circular(20),
+                                            bottomRight: itemTheme.borderRadius?.bottomRight ?? const Radius.circular(20),
+                                            topLeft: Radius.zero,
+                                            bottomLeft: Radius.zero,
+                                          ) ??
+                                          BorderRadius.only(
+                                            topRight: itemTheme.borderRadius?.topLeft ?? const Radius.circular(20),
+                                            bottomRight: itemTheme.borderRadius?.bottomLeft ?? const Radius.circular(20),
+                                            topLeft: Radius.zero,
+                                            bottomLeft: Radius.zero,
+                                          )
+                                      : widget.side == GenericSelelectionWidgetButtonSide.middle
+                                          ? itemTheme.borderRadius?.copyWith(
+                                                topLeft: Radius.zero,
+                                                bottomLeft: Radius.zero,
+                                                topRight: Radius.zero,
+                                                bottomRight: Radius.zero,
+                                              ) ??
+                                              const BorderRadius.only(
+                                                topLeft: Radius.zero,
+                                                bottomLeft: Radius.zero,
+                                                topRight: Radius.zero,
+                                                bottomRight: Radius.zero,
+                                              )
+                                          : widget.borderRadius ?? itemTheme.borderRadius ?? BorderRadius.circular(20))
+                              : null;
+
+                          // ✅ border se řídí JEN theme (žádný custom fallback)
+                          final Border? effectiveBorder = (!widget.isTransparent && !widget.removeBtnBackgroundStyling) ? itemTheme.border : null;
+
+                          // ✅ helper: původní obsah uvnitř tlačítka
+                          Widget buildLegacyContent({required bool includeBottomText}) {
+                            return Flex(
+                              direction: Axis.vertical,
+                              mainAxisAlignment: (displayIcons || displayImages) ? MainAxisAlignment.spaceEvenly : MainAxisAlignment.center,
+                              children: [
+                                // navigation title nahoře
+                                widget.isNavigation && !includeBottomText && widget.states[currStateValue]?.title != null && widget.states[currStateValue]?.title != ''
+                                    ? Flexible(
+                                        flex: textWidgetFlex,
+                                        child: Text(
+                                          widget.states[currStateValue]?.title ?? widget.title ?? "",
+                                          textAlign: TextAlign.center,
+                                          style: widget.textStyle?.copyWith(
+                                                color: itemTheme.textColor ?? itemTheme.symbolColor,
+                                                shadows: itemTheme.textShadows,
+                                              ) ??
+                                              myTheme.textTheme?.titleLarge?.copyWith(
+                                                color: itemTheme.textColor ?? itemTheme.symbolColor,
+                                                shadows: itemTheme.textShadows,
+                                              ),
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
+
+                                // icons
+                                displayIcons
+                                    ? Flexible(
+                                        flex: iconWidgetFlex,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            ...List.generate(
+                                              currentStateIcons.isNotEmpty ? currentStateIcons.length : (widget.icons?.length ?? 0),
+                                              (index) => Icon(
+                                                currentStateIcons.isNotEmpty ? currentStateIcons[index] : widget.icons![index],
+                                                size: widget.iconSize,
+                                                color: widget.iconsColor ?? itemTheme.symbolColor,
+                                                shadows: widget.iconsShadow ?? itemTheme.shadow,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
+
+                                // imageState
+                                displayImages && currentImageState != null
+                                    ? Flexible(
+                                        flex: iconWidgetFlex,
+                                        child: ColorFiltered(
+                                          colorFilter: currentImageState.imageEffect == ImageEffect.grayscale
+                                              ? const ColorFilter.matrix(<double>[
+                                                  0.2126,
+                                                  0.7152,
+                                                  0.0722,
+                                                  0,
+                                                  0,
+                                                  0.2126,
+                                                  0.7152,
+                                                  0.0722,
+                                                  0,
+                                                  0,
+                                                  0.2126,
+                                                  0.7152,
+                                                  0.0722,
+                                                  0,
+                                                  0,
+                                                  0,
+                                                  0,
+                                                  0,
+                                                  1,
+                                                  0,
+                                                ])
+                                              : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
+                                          child: CfgImage(
+                                            currentImageState.imagePath,
+                                            width: widget.imageSize != null && widget.imageSize!.isNotEmpty ? widget.imageSize![0] : null,
+                                            height: widget.imageSize != null && widget.imageSize!.length > 1 ? widget.imageSize![1] : null,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
+
+                                // bottom text (PŮVODNÍ CHOVÁNÍ)
+                                (!widget.isNavigation && includeBottomText && widget.states[currStateValue]?.title != null && widget.states[currStateValue]?.title != '')
+                                    ? Flexible(
+                                        flex: textWidgetFlex,
+                                        child: Text(
+                                          widget.states[currStateValue]?.title ?? widget.title ?? "",
+                                          textAlign: TextAlign.center,
+                                          style: widget.textStyle?.copyWith(
+                                                color: itemTheme.textColor ?? itemTheme.symbolColor,
+                                                shadows: itemTheme.textShadows,
+                                              ) ??
+                                              myTheme.textTheme?.titleLarge?.copyWith(
+                                                color: itemTheme.textColor ?? itemTheme.symbolColor,
+                                                shadows: itemTheme.textShadows,
+                                              ),
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
+                              ],
+                            );
+                          }
+
+                          return ColorFiltered(
+                            colorFilter: shouldGray
+                                ? const ColorFilter.matrix(<double>[
+                                    0.2126,
+                                    0.7152,
+                                    0.0722,
+                                    0,
+                                    0,
+                                    0.2126,
+                                    0.7152,
+                                    0.0722,
+                                    0,
+                                    0,
+                                    0.2126,
+                                    0.7152,
+                                    0.0722,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    1,
+                                    0,
+                                  ])
+                                : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
+                            child: Container(
+                              height: widget.height,
+                              width: widget.width,
+                              decoration: BoxDecoration(
+                                image: widget.backgroundImage != null
+                                    ? DecorationImage(
+                                        image: AssetImage(widget.backgroundImage!),
+                                        fit: BoxFit.cover,
+                                        alignment: Alignment.center,
+                                      )
+                                    : null,
+
+                                border: effectiveBorder,
+
+                                // color/gradient jen když není backgroundImage
+                                color: (!widget.isTransparent && !widget.removeBtnBackgroundStyling && widget.backgroundImage == null)
+                                    ? (widget.color != Colors.transparent ? (widget.color ?? itemTheme.backroundColor) : itemTheme.backroundColor)
+                                    : widget.color,
+
+                                gradient: (!widget.isTransparent && !widget.removeBtnBackgroundStyling && widget.backgroundImage == null) ? itemTheme.gradient : null,
+
+                                borderRadius: effectiveRadius,
+                                boxShadow: (!widget.isTransparent && !widget.removeBtnBackgroundStyling) ? itemTheme.boxShadow : null,
+                              ),
+
+                              // overlay gradient přes backgroundImage (active/inactive/default)
+                              foregroundDecoration: overlayGradient != null
+                                  ? BoxDecoration(
+                                      gradient: overlayGradient,
+                                      borderRadius: effectiveRadius ?? widget.borderRadius ?? itemTheme.borderRadius,
+                                    )
+                                  : null,
+
+                              alignment: Alignment.center,
+
+                              child: (!widget.isTransparent || widget.keepContentWhenTransparent)
+                                  ? (widget.iconTextInline
+                                      ? _buildInlineIconText(
+                                          myTheme: myTheme,
+                                          itemTheme: itemTheme,
+                                          currStateValue: currStateValue,
+                                          currentStateIcons: currentStateIcons,
+                                          displayIcons: displayIcons,
+                                          displayImages: displayImages,
+                                          currentImageState: currentImageState,
+                                        )
+                                      : (useOverlayText
+                                          ? Stack(
+                                              fit: StackFit.expand,
+                                              children: [
+                                                // 1) obsah bez bottom textu, ale zachováme výškový poměr:
+                                                //    místo bottom textu dáme "rezervaci", aby se ikony nezvětšily
+                                                Center(
+                                                  child: Flex(
+                                                    direction: Axis.vertical,
+                                                    mainAxisAlignment: (displayIcons || displayImages) ? MainAxisAlignment.spaceEvenly : MainAxisAlignment.center,
+                                                    children: [
+                                                      // nav title (většinou false)
+                                                      widget.isNavigation && widget.states[currStateValue]?.title != null && widget.states[currStateValue]?.title != ''
+                                                          ? Flexible(
+                                                              flex: textWidgetFlex,
+                                                              child: Text(
+                                                                widget.states[currStateValue]?.title ?? widget.title ?? "",
+                                                                textAlign: TextAlign.center,
+                                                                style: widget.textStyle?.copyWith(
+                                                                      color: itemTheme.textColor ?? itemTheme.symbolColor,
+                                                                      shadows: itemTheme.textShadows,
+                                                                    ) ??
+                                                                    myTheme.textTheme?.titleLarge?.copyWith(
+                                                                      color: itemTheme.textColor ?? itemTheme.symbolColor,
+                                                                      shadows: itemTheme.textShadows,
+                                                                    ),
+                                                              ),
+                                                            )
+                                                          : const SizedBox.shrink(),
+
+                                                      // icons
+                                                      displayIcons
+                                                          ? Flexible(
+                                                              flex: iconWidgetFlex,
+                                                              child: Row(
+                                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                                children: [
+                                                                  ...List.generate(
+                                                                    currentStateIcons.isNotEmpty ? currentStateIcons.length : (widget.icons?.length ?? 0),
+                                                                    (index) => Icon(
+                                                                      currentStateIcons.isNotEmpty ? currentStateIcons[index] : widget.icons![index],
+                                                                      size: widget.iconSize,
+                                                                      color: widget.iconsColor ?? itemTheme.symbolColor,
+                                                                      shadows: widget.iconsShadow ?? itemTheme.shadow,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            )
+                                                          : const SizedBox.shrink(),
+
+                                                      // imageState
+                                                      displayImages && currentImageState != null
+                                                          ? Flexible(
+                                                              flex: iconWidgetFlex,
+                                                              child: ColorFiltered(
+                                                                colorFilter: currentImageState.imageEffect == ImageEffect.grayscale
+                                                                    ? const ColorFilter.matrix(<double>[
+                                                                        0.2126,
+                                                                        0.7152,
+                                                                        0.0722,
+                                                                        0,
+                                                                        0,
+                                                                        0.2126,
+                                                                        0.7152,
+                                                                        0.0722,
+                                                                        0,
+                                                                        0,
+                                                                        0.2126,
+                                                                        0.7152,
+                                                                        0.0722,
+                                                                        0,
+                                                                        0,
+                                                                        0,
+                                                                        0,
+                                                                        0,
+                                                                        1,
+                                                                        0,
+                                                                      ])
+                                                                    : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
+                                                                child: CfgImage(
+                                                                  currentImageState.imagePath,
+                                                                  width: widget.imageSize != null && widget.imageSize!.isNotEmpty ? widget.imageSize![0] : null,
+                                                                  height: widget.imageSize != null && widget.imageSize!.length > 1 ? widget.imageSize![1] : null,
+                                                                  fit: BoxFit.contain,
+                                                                ),
+                                                              ),
+                                                            )
+                                                          : const SizedBox.shrink(),
+
+                                                      // ✅ rezervace prostoru pro text dole
+                                                      Flexible(flex: textWidgetFlex, child: const SizedBox.shrink()),
+                                                    ],
+                                                  ),
+                                                ),
+
+                                                // 2) overlay text aligned
+                                                Align(
+                                                  alignment: widget.textAlignment!,
+                                                  child: Container(
+                                                    width: double.infinity,
+                                                    decoration: widget.textOverlayGradient != null ? BoxDecoration(gradient: widget.textOverlayGradient) : null,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                    child: Text(
+                                                      widget.states[currStateValue]?.title ?? widget.title ?? "",
+                                                      textAlign: _getTextAlignFromAlignment(widget.textAlignment!),
+                                                      style: widget.textStyle?.copyWith(
+                                                            color: Colors.white,
+                                                            shadows: [
+                                                              Shadow(
+                                                                color: Colors.black.withOpacity(0.8),
+                                                                blurRadius: 4,
+                                                                offset: const Offset(0, 2),
+                                                              ),
+                                                            ],
+                                                          ) ??
+                                                          const TextStyle(
+                                                            color: Colors.white,
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+
+                                          // =========================
+                                          // LEGACY MODE: původní render (nezvětší ikony, nepřekryje text)
+                                          // =========================
+                                          : buildLegacyContent(includeBottomText: true)))
+                                  : const SizedBox.shrink(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ));
+    });
+
+    return widget.position != null
+        ? Positioned(
+            top: widget.position!.y,
+            left: widget.position!.x,
+            child: selectionContent,
+          )
+        : selectionContent;
+  }
+}

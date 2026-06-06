@@ -1,0 +1,1 @@
+enum RoomType { lounge, hallway, loungeAndHallway }
