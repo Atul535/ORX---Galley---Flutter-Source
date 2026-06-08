@@ -49,7 +49,8 @@ import 'helpers/protocol_decoder.dart';
 import 'widgets/cfg_image.dart';
 
 // this is solely for demo and testing purposes on windows
-double windowScale = 1.0;
+// double windowScale = 1.0;
+double windowScale = 0.45;
 double windowHeight = 1080;
 double windowWidth = 1920;
 Future<void> configureWindow() async {
@@ -160,9 +161,7 @@ void main() async {
   runApp(
     TimerServiceProvider(
       service: TimerService(),
-      child: Platform.isWindows && windowScale != 1
-          ? _ScaledApp(child: const MyApp())
-          : const MyApp(),
+      child: const _ScaledApp(child: MyApp()),
     ),
   );
 }
@@ -659,8 +658,8 @@ class _ScaledApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FittedBox(
-      fit: BoxFit.fill, // nebo BoxFit.contain / cover podle chuti
-      alignment: Alignment.topLeft,
+      fit: BoxFit.contain, // nebo BoxFit.contain / cover podle chuti
+      alignment: Alignment.center,
       child: SizedBox(
         width: windowWidth,
         height: windowHeight,
