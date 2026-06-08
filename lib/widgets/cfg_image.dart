@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../config/asset_config.dart';
 import '../utils/logger.dart';
@@ -34,16 +33,20 @@ class CfgImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final fullPath = AssetConfig.img(path);
 
-    return Image.file(
-      File(fullPath),
+    return Image(
+      image: cfgImageProvider(path),
       width: width,
       height: height,
       fit: fit,
       color: color,
       colorBlendMode: colorBlendMode,
-	  alignment: alignment,
+      alignment: alignment,
       errorBuilder: (ctx, error, stack) {
-        logError('CfgImage', 'Missing image: $fullPath');
+        logError(
+            'CfgImage',
+            AssetConfig.usesBundledAssets
+                ? 'Missing bundled image: cfg2/${path.startsWith('assets/') ? path.substring('assets/'.length) : path}'
+                : 'Missing image: $fullPath');
         return SizedBox(
           width: width,
           height: height,
@@ -59,5 +62,5 @@ class CfgImage extends StatelessWidget {
 /// Example:
 ///   DecorationImage(image: cfgImageProvider('backgrounds/lounge.png'))
 ///   Image(image: cfgImageProvider('logo.png'))
-FileImage cfgImageProvider(String relativePath) =>
-    FileImage(File(AssetConfig.img(relativePath)));
+ImageProvider cfgImageProvider(String relativePath) =>
+    AssetConfig.imageProvider(relativePath);

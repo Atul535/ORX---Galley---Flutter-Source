@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import '../managers/settings_manager.dart';
 import '../utils/logger.dart';
 
@@ -19,7 +20,8 @@ class SettingsProvider with ChangeNotifier {
   int acid = 0;
   Map<String, int> configVersion = {'major': 0, 'minor': 0};
 
-  final String VERSION_FILE_PATH = '/home/nargouser/projects/app2/version.json';
+  static const String _linuxVersionFilePath =
+      '/home/nargouser/projects/app2/version.json';
 
   int get wallpaperTime => _wallpaperTime;
 
@@ -65,7 +67,7 @@ class SettingsProvider with ChangeNotifier {
   // Add method to load version file
   Future<void> loadVersionFile() async {
     try {
-      final file = File(VERSION_FILE_PATH);
+      final file = await _versionFile();
       if (await file.exists()) {
         final contents = await file.readAsString();
         final Map<String, dynamic> versionData = json.decode(contents);
@@ -84,7 +86,8 @@ class SettingsProvider with ChangeNotifier {
   // Add method to update version file
   Future<void> updateVersionFile(Map<String, int> newVersion) async {
     try {
-      final file = File(VERSION_FILE_PATH);
+      final file = await _versionFile();
+      await file.create(recursive: true);
       final versionJson = json.encode(newVersion);
       await file.writeAsString(versionJson);
       configVersion = Map.from(newVersion);
@@ -92,6 +95,22 @@ class SettingsProvider with ChangeNotifier {
     } catch (e) {
       logError('SettingsProvider', 'Error updating version file: $e');
     }
+  }
+
+  Future<File> _versionFile() async {
+    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+      final directory = await getApplicationDocumentsDirectory();
+      return File('${directory.path}${Platform.pathSeparator}version.json');
+    }
+
+    if (Platform.isWindows) {
+      return File(
+        '${Directory.current.path}${Platform.pathSeparator}projects'
+        '${Platform.pathSeparator}app2${Platform.pathSeparator}version.json',
+      );
+    }
+
+    return File(_linuxVersionFilePath);
   }
 
   /// Dynamically fetches a setting value

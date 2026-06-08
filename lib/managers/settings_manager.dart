@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path_provider/path_provider.dart';
+
 import '../utils/logger.dart';
 
 class SettingsManager {
-  // static String settingsPath = path.join(
-  //     Directory.current.path, 'projects', 'settings', 'settings.json');
-  static String settingsPath =
-      "/home/nargouser/projects/settings/settings.json";
+  static const String _linuxSettingsPath =
+      '/home/nargouser/projects/settings/settings.json';
 
   static final Map<String, dynamic> _defaultSettings = {
     'id': 0,
@@ -23,10 +23,10 @@ class SettingsManager {
 
   /// Loads the settings from the JSON file or creates a new one with default values
   static Future<Map<String, dynamic>> loadSettings() async {
-    logDebug('SettingsManager', 'settingsPath: $settingsPath');
-
     try {
-      final file = File(settingsPath);
+      final file = await _settingsFile();
+      logDebug('SettingsManager', 'settingsPath: ${file.path}');
+
       if (await file.exists()) {
         // If file exists, read and decode it
         final contents = await file.readAsString();
@@ -45,12 +45,28 @@ class SettingsManager {
   /// Saves the provided settings to the JSON file
   static Future<void> saveSettings(Map<String, dynamic> settings) async {
     try {
-      final file = File(settingsPath);
+      final file = await _settingsFile();
       await file.create(
           recursive: true); // Ensure the directory structure exists
       await file.writeAsString(jsonEncode(settings));
     } catch (e) {
       throw Exception('Error saving settings: $e');
     }
+  }
+
+  static Future<File> _settingsFile() async {
+    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+      final directory = await getApplicationDocumentsDirectory();
+      return File('${directory.path}${Platform.pathSeparator}settings.json');
+    }
+
+    if (Platform.isWindows) {
+      return File(
+        '${Directory.current.path}${Platform.pathSeparator}projects'
+        '${Platform.pathSeparator}settings${Platform.pathSeparator}settings.json',
+      );
+    }
+
+    return File(_linuxSettingsPath);
   }
 }

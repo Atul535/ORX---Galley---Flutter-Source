@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
+
 /// Central asset path configuration.
 /// Edit the two constants below to match your deployment layout.
 ///
@@ -29,6 +31,8 @@ class AssetConfig {
   static String get base =>
       Platform.isWindows ? _windowsBase : _linuxBase;
 
+  static bool get usesBundledAssets => Platform.isAndroid || Platform.isIOS;
+
   /// Converts a relative path like 'icons/icon_home.png'
   /// or legacy 'assets/icons/icon_home.png' into the full filesystem path.
   ///
@@ -36,12 +40,25 @@ class AssetConfig {
   ///   AssetConfig.img('icons/icon_home.png')
   ///   → '/home/nargouser/projects/cfg2/icons/icon_home.png'
   static String img(String relativePath) {
-    // Strip legacy 'assets/' prefix if present
-    final clean = relativePath.startsWith('assets/')
-        ? relativePath.substring('assets/'.length)
-        : relativePath;
+    final clean = _cleanPath(relativePath);
     return Platform.isWindows
         ? '$base\\${clean.replaceAll('/', '\\')}'
         : '$base/$clean';
+  }
+
+  static ImageProvider imageProvider(String relativePath) {
+    final clean = _cleanPath(relativePath);
+
+    if (usesBundledAssets) {
+      return AssetImage('cfg2/$clean');
+    }
+
+    return FileImage(File(img(clean)));
+  }
+
+  static String _cleanPath(String relativePath) {
+    return relativePath.startsWith('assets/')
+        ? relativePath.substring('assets/'.length)
+        : relativePath;
   }
 }
